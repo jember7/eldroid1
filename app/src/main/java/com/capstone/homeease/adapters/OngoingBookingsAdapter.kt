@@ -35,19 +35,30 @@ class OngoingBookingsAdapter(var context: Context, var bookings: List<Booking>) 
         holder.address.text = "Address: ${booking.userAddress}"
         holder.bookingStatusTextView.text = "Status: ${booking.status}"
         holder.noteTextView.text = "Note: ${booking.note}"
-        holder.bookingTimestampTextView.text = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(
-            Date(booking.timestamp)
-        )
+
+        // Safe date parsing
+        try {
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) // Correct format
+            val date = dateFormat.parse(booking.timestamp) // Parse the timestamp string into Date
+            if (date != null) {
+                holder.bookingTimestampTextView.text = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(date)
+            } else {
+                holder.bookingTimestampTextView.text = "Invalid Date"
+            }
+        } catch (e: Exception) {
+            Log.e("OngoingBookings", "Error parsing timestamp: ${booking.timestamp}", e)
+            holder.bookingTimestampTextView.text = "Invalid Date"
+        }
 
         // Set visibility and click listeners for the buttons
-        when (booking.status) {
-            "Pending" -> {
+        when (booking.status.toLowerCase()) {  // Ensure status comparison is case insensitive
+            "pending" -> {
                 holder.acceptButton.visibility = View.VISIBLE
                 holder.declineButton.visibility = View.VISIBLE
                 holder.completeButton.visibility = View.GONE
                 holder.cancelButton.visibility = View.GONE
             }
-            "Accepted" -> {
+            "ongoing" -> {
                 holder.acceptButton.visibility = View.GONE
                 holder.declineButton.visibility = View.GONE
                 holder.completeButton.visibility = View.VISIBLE
@@ -62,18 +73,13 @@ class OngoingBookingsAdapter(var context: Context, var bookings: List<Booking>) 
         }
 
         // Handle button actions
-        holder.acceptButton.setOnClickListener {
-            updateBookingStatus(booking, "Accepted", holder)
-        }
-
-        holder.declineButton.setOnClickListener {
-            updateBookingStatus(booking, "Declined", holder)
-        }
-
         holder.completeButton.setOnClickListener {
-            updateBookingStatus(booking, "Completed", holder)
+            // Update status to 'Completed' when the button is clicked
+            updateBookingStatus(booking, "completed", holder)
         }
     }
+
+
 
     override fun getItemCount(): Int {
         return bookings.size

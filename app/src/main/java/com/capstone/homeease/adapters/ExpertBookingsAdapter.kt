@@ -13,6 +13,10 @@ import com.capstone.homeease.R
 import com.capstone.homeease.model.ApiResponse2
 import com.capstone.homeease.model.Booking
 import com.capstone.homeease.network.LaravelApi
+import com.google.gson.Gson
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -24,41 +28,43 @@ import java.util.Locale
 
 class ExpertBookingsAdapter(private val context: Context, private var bookings: List<Booking>) : RecyclerView.Adapter<ExpertBookingsAdapter.BookingViewHolder>() {
     private var allBookings: MutableList<Booking> = mutableListOf()
-    private lateinit var expertBookingsAdapter: ExpertBookingsAdapter
-    private lateinit var ongoingBookingsAdapter: OngoingBookingsAdapter
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BookingViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_bookings, parent, false)
         return BookingViewHolder(view)
     }
 
-
     override fun onBindViewHolder(holder: BookingViewHolder, position: Int) {
         val booking = bookings[position]
 
-        // Log the booking data for debugging
-        Log.d("ExpertBookings", "Binding booking at position: $position with name: ${booking.userName}")
-        val dateString = booking.timestamp // Ensure this is a proper string format, e.g., "2024-12-01T15:30:00"
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
         try {
-            val date = dateFormat.parse(dateString)
-
-            val displayFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-            val formattedDate = displayFormat.format(date)
-
-            holder.bookingTimestampTextView.text = formattedDate
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) // Correct format
+            val date = dateFormat.parse(booking.timestamp) // Parse the timestamp string into Date
+            if (date != null) {
+                holder.bookingTimestampTextView.text = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(date)
+            } else {
+                holder.bookingTimestampTextView.text = "Invalid Date"
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
-            holder.bookingTimestampTextView.text = "Invalid Date" // Handle invalid dates gracefully
+            Log.e("OngoingBookings", "Error parsing timestamp: ${booking.timestamp}", e)
+            holder.bookingTimestampTextView.text = "Invalid Date"
         }
 
         holder.expertNameTextView.text = booking.userName
         holder.address.text = "Address: ${booking.userAddress}"
         holder.bookingStatusTextView.text = "Status: ${booking.status}"
         holder.note.text = "Note: ${booking.note}"
+
         holder.acceptButton.setOnClickListener {
-            val bookingId = booking.id // Replace with your booking ID field
+            if (booking.expertId == null) {
+                Log.e("ExpertBookingsAdapter", "Expert ID is missing for booking: ${booking.id}")
+                Toast.makeText(context, "Expert ID is missing", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val bookingId = booking.id
             val retrofit = Retrofit.Builder()
-                .baseUrl("http://10.0.2.2:8000/api/")
+                .baseUrl("http://10.0.2.2:8000/api/") // Use your actual API base URL here
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
 
@@ -66,27 +72,49 @@ class ExpertBookingsAdapter(private val context: Context, private var bookings: 
             api.acceptBooking(bookingId.toInt()).enqueue(object : Callback<ApiResponse2> {
                 override fun onResponse(call: Call<ApiResponse2>, response: Response<ApiResponse2>) {
                     if (response.isSuccessful) {
-                        val bookings = response.body()?.data
-                        if (bookings != null) {
-                            allBookings.clear()
-                            allBookings.addAll(bookings) // Store all bookings
-                            val ongoingBookings = allBookings.filter { it.status == "ongoing" }
-                            val completedBookings = allBookings.filter { it.status == "pending" }
+                        val responseBody = response.body()
+                        Log.d("APIResponse", "Response Body: ${Gson().toJson(responseBody)}")  // Log the full response
 
-                            expertBookingsAdapter.updateBookings(completedBookings)
-                            ongoingBookingsAdapter.updateBookings(ongoingBookings)
+                        val gson = Gson()
+
+
+                        if (responseBody != null) {
+                            val jsonElement = gson.toJsonTree(responseBody.data)
+                            if (jsonElement.isJsonArray) {
+                                // Handle response if 'data' is an array
+                                val updatedBookingsList: List<Booking> = gson.fromJson(jsonElement, Array<Booking>::class.java).toList()
+                                bookings = updatedBookingsList
+                                notifyDataSetChanged()
+                            } else if (jsonElement.isJsonObject) {
+                                // Handle response if 'data' is a single object
+                                val updatedBooking: Booking = gson.fromJson(jsonElement, Booking::class.java)
+                                val updatedBookings = bookings.toMutableList()
+                                val index = updatedBookings.indexOfFirst { it.id == updatedBooking.id }
+                                if (index != -1) {
+                                    updatedBookings[index] = updatedBooking
+                                    bookings = updatedBookings
+                                    notifyItemChanged(holder.adapterPosition)
+                                }
+                            }
                         }
+
+                    } else {
+                        Log.e("ExpertBookingsAdapter", "Response failed with code: ${response.code()}")
+                        Toast.makeText(context, "Failed to accept booking: ${response.code()}", Toast.LENGTH_SHORT).show()
                     }
                 }
 
 
+
+
                 override fun onFailure(call: Call<ApiResponse2>, t: Throwable) {
+                    // Log the failure details
+                    Log.e("ExpertBookingsAdapter", "Error accepting booking: ${booking.id}, Error: ${t.message}")
                     Toast.makeText(context, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
                 }
             })
         }
 
-        // Show and hide buttons based on the booking status
         when (booking.status) {
             "pending" -> {
                 holder.acceptButton.visibility = View.VISIBLE
@@ -94,7 +122,7 @@ class ExpertBookingsAdapter(private val context: Context, private var bookings: 
                 holder.completeButton.visibility = View.GONE
                 holder.cancelButton.visibility = View.GONE
             }
-            "accepted" -> {
+            "ongoing" -> {
                 holder.acceptButton.visibility = View.GONE
                 holder.declineButton.visibility = View.GONE
                 holder.completeButton.visibility = View.VISIBLE
@@ -107,58 +135,73 @@ class ExpertBookingsAdapter(private val context: Context, private var bookings: 
                 holder.cancelButton.visibility = View.GONE
             }
         }
-
-        // Set button click listeners
-        holder.acceptButton.setOnClickListener {
-            updateBookingStatus(booking, "Accepted")
-        }
-
         holder.declineButton.setOnClickListener {
-            updateBookingStatus(booking, "Declined")
+            if (booking.expertId == null) {
+                Log.e("ExpertBookingsAdapter", "Expert ID is missing for booking: ${booking.id}")
+                Toast.makeText(context, "Expert ID is missing", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val bookingId = booking.id
+            val retrofit = Retrofit.Builder()
+                .baseUrl("http://10.0.2.2:8000/api/") // Use your actual API base URL here
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+
+            val api = retrofit.create(LaravelApi::class.java)
+            api.declineBooking(bookingId.toInt()).enqueue(object : Callback<ApiResponse2> {
+                override fun onResponse(call: Call<ApiResponse2>, response: Response<ApiResponse2>) {
+                    if (response.isSuccessful) {
+                        val responseBody = response.body()
+                        Log.d("APIResponse", "Response Body: ${Gson().toJson(responseBody)}")  // Log the full response
+
+                        val gson = Gson()
+
+                        if (responseBody != null) {
+                            val jsonElement = gson.toJsonTree(responseBody.data)
+                            if (jsonElement.isJsonArray) {
+                                // Handle response if 'data' is an array
+                                val updatedBookingsList: List<Booking> = gson.fromJson(jsonElement, Array<Booking>::class.java).toList()
+                                bookings = updatedBookingsList
+                                notifyDataSetChanged()
+                            } else if (jsonElement.isJsonObject) {
+                                // Handle response if 'data' is a single object
+                                val updatedBooking: Booking = gson.fromJson(jsonElement, Booking::class.java)
+                                val updatedBookings = bookings.toMutableList()
+                                val index = updatedBookings.indexOfFirst { it.id == updatedBooking.id }
+                                if (index != -1) {
+                                    updatedBookings[index] = updatedBooking
+                                    bookings = updatedBookings
+                                    notifyItemChanged(holder.adapterPosition)
+                                }
+                            }
+                        }
+
+                    } else {
+                        Log.e("ExpertBookingsAdapter", "Response failed with code: ${response.code()}")
+                        Toast.makeText(context, "Failed to decline booking: ${response.code()}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onFailure(call: Call<ApiResponse2>, t: Throwable) {
+                    // Log the failure details
+                    Log.e("ExpertBookingsAdapter", "Error declining booking: ${booking.id}, Error: ${t.message}")
+                    Toast.makeText(context, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                }
+            })
         }
 
-        holder.completeButton.setOnClickListener {
-            updateBookingStatus(booking, "Completed")
-        }
     }
 
     override fun getItemCount(): Int {
         return bookings.size
     }
 
-    // Update bookings data
     fun updateBookings(newBookings: List<Booking>) {
         this.bookings = newBookings
         notifyDataSetChanged()
     }
 
-    // Simulate status update
-    private fun updateBookingStatus(booking: Booking, status: String) {
-        // Log when expertId is null
-        if (booking.expertId == null) {
-            Log.d("Booking", "Booking ID: ${booking.id}, Expert ID: ${booking.expertId}")
-            Log.e("ExpertBookingsAdapter", "Expert ID is missing for booking: ${booking.id}")
-            Toast.makeText(context, "Expert ID is missing", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // Proceed with the status update if expertId is not null
-        val updatedBookings = bookings.toMutableList()
-        val index = updatedBookings.indexOfFirst { it.id == booking.id }
-        if (index != -1) {
-            val updatedBooking = booking.copy(
-                status = status,
-                expertId = booking.expertId!! // Safe to access after null check
-            )
-            updatedBookings[index] = updatedBooking
-            bookings = updatedBookings
-            notifyItemChanged(index)
-            Toast.makeText(context, "Booking $status", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-
-    // ViewHolder class for binding item views
     class BookingViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val expertNameTextView: TextView = itemView.findViewById(R.id.expertNameTextView)
         val address: TextView = itemView.findViewById(R.id.address)
@@ -171,3 +214,4 @@ class ExpertBookingsAdapter(private val context: Context, private var bookings: 
         val cancelButton: Button = itemView.findViewById(R.id.cancelButton)
     }
 }
+

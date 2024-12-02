@@ -5,88 +5,100 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.capstone.homeease.R
-import com.capstone.homeease.adapters.BookingsAdapter
-import com.capstone.homeease.model.ActivityViewModel
-import com.capstone.homeease.databinding.FragmentActivityBinding
+import com.capstone.homeease.adapters.ExpertBookingsAdapter
+import com.capstone.homeease.databinding.FragmentExpertActivityBinding
+import com.capstone.homeease.model.ApiResponse2
+import com.capstone.homeease.network.LaravelApi
 import com.capstone.homeease.utils.SharedPreferencesHelper.getUserId
-
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class ExpertActivityFragment : Fragment() {
 
-    private lateinit var binding: FragmentActivityBinding
-    private lateinit var pendingAdapter: BookingsAdapter
-    private lateinit var ongoingAdapter: BookingsAdapter
-    private lateinit var activityViewModel: ActivityViewModel
+    private lateinit var binding: FragmentExpertActivityBinding
+    private lateinit var ongoingRecyclerView: RecyclerView
+    private lateinit var ebAdapter: ExpertBookingsAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Initialize ViewModel
-        activityViewModel = ViewModelProvider(this).get(ActivityViewModel::class.java)
+        // Inflate the layout for this fragment using ViewBinding
+        binding = FragmentExpertActivityBinding.inflate(inflater, container, false)
 
-        // Inflate the layout
-        binding = FragmentActivityBinding.inflate(inflater, container, false)
-
-        // Set up RecyclerViews and adapters
-        binding.pendingRecyclerView.layoutManager = LinearLayoutManager(context)
-        binding.ongoingRecyclerView.layoutManager = LinearLayoutManager(context)
-
-        pendingAdapter = BookingsAdapter(requireContext(), mutableListOf())
-        ongoingAdapter = BookingsAdapter(requireContext(), mutableListOf())
-
-        binding.pendingRecyclerView.adapter = pendingAdapter
-        binding.ongoingRecyclerView.adapter = ongoingAdapter
-
+        ongoingRecyclerView = binding.ongoingRecyclerView
+        ongoingRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        ebAdapter = ExpertBookingsAdapter(requireContext(), mutableListOf())
+        ongoingRecyclerView.adapter = ebAdapter
+        // Fetch bookings data from the backend
+        fetchBookings()
         binding.activity.setOnClickListener {
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, ActivityPageFragment())
-                .commitAllowingStateLoss()
+                .replace(R.id.fragmentContainer, ExpertActivityFragment())
+                .addToBackStack(null)
+                .commit()
         }
         binding.payment.setOnClickListener {
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, PaymentFragment())
+                .replace(R.id.fragmentContainer, ExpertPaymentFragment())
+                .addToBackStack(null)
                 .commit()
         }
         binding.textHome.setOnClickListener {
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, UserDashBoardFragment())
-                .commitAllowingStateLoss()
+                .replace(R.id.fragmentContainer, ExpertDashBoardFragment())
+                .addToBackStack(null)
+                .commit()
         }
         binding.profile.setOnClickListener {
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, ProfileFragment())
+                .replace(R.id.fragmentContainer, ExpertProfileFragment())
+                .addToBackStack(null)
                 .commit()
         }
-
-        // Observe LiveData for ongoing and pending bookings
-        activityViewModel.ongoingBookings.observe(viewLifecycleOwner) { bookings ->
-            ongoingAdapter.updateBookings(bookings)
-        }
-
-        activityViewModel.pendingBookings.observe(viewLifecycleOwner) { bookings ->
-            pendingAdapter.updateBookings(bookings)
-        }
-
-        activityViewModel.errorMessage.observe(viewLifecycleOwner) { error ->
-            // Handle error (e.g., show a Toast or Snackbar)
-            Log.e("ActivityPageFragment", "Error: $error")
-        }
-
-        binding.historyButton.setOnClickListener {
-            parentFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, HistoryFragment())
-                .commitAllowingStateLoss()
-        }
-        // Fetch the bookings using the ViewModel (replace with actual user ID)
-        val userId = getUserId(requireContext()) // Assuming getUserId() returns an integer
-        activityViewModel.fetchBookings(userId)
-
         return binding.root
     }
-}
 
+    private fun fetchBookings() {
+        val expertId = getUserId(requireContext()) // Use the expert's user ID for the API call
+        val retrofit = Retrofit.Builder()
+            .baseUrl("http://10.0.2.2:8000/api/") // Change base URL if needed
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+        val api = retrofit.create(LaravelApi::class.java)
+
+        api.getExpertBookings(expertId).enqueue(object : Callback<ApiResponse2> {
+            override fun onResponse(call: Call<ApiResponse2>, response: Response<ApiResponse2>) {
+                if (response.isSuccessful) {
+                    val bookings = response.body()?.data
+                    if (bookings != null && bookings.isNotEmpty()) {
+                        Log.d("ExpertActivityFragment", "Bookings fetched successfully: ${bookings.size} bookings found.")
+                        // Update the adapter with the fetched bookings
+                        ebAdapter.updateBookings(bookings)
+
+                    } else {
+                        Log.d("ExpertActivityFragment", "No bookings available")
+                    }
+                } else {
+                    Log.e("ExpertActivityFragment", "Failed to load expert bookings. Response: ${response.code()}")
+                    Toast.makeText(requireContext(), "Failed to load expert bookings", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<ApiResponse2>, t: Throwable) {
+                Log.e("ExpertActivityFragment", "Error fetching bookings: ${t.message}")
+                Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+}

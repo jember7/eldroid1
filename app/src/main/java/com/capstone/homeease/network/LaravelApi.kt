@@ -45,6 +45,8 @@ interface LaravelApi {
     fun getExpertBookings(@Path("expertId") expertId: Int): Call<ApiResponse2>
     @PUT("bookings/{id}/accept")
     fun acceptBooking(@Path("id") bookingId: Int): Call<ApiResponse2>
+    @PUT("bookings/{id}/decline")
+    fun declineBooking(@Path("id") bookingId: Int): Call<ApiResponse2>
 
 
     @GET("bookings/user/{userId}")  //

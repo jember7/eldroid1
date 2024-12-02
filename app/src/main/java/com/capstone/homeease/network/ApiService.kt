@@ -4,10 +4,12 @@ package com.capstone.homeease.network
 import com.capstone.homeease.model.ApiResponse
 import com.capstone.homeease.model.ChangePasswordRequest
 import com.capstone.homeease.model.ExpertIdResponse
+import com.capstone.homeease.model.ExpertProfileResponse
 import com.capstone.homeease.model.LoginResponse
 import com.capstone.homeease.model.LoginResponse2
 
 import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.http.Body
@@ -43,15 +45,27 @@ interface ApiService {
     fun getUserProfile(
         @Query("id") userId: Int // Use @Query to pass the userId as a query parameter
     ): Call<LoginResponse2>
-
+    @GET("expert-profile")
+    fun getExpertProfile(@Query("userId") userId: Int): Call<ExpertProfileResponse>
     @FormUrlEncoded
     @PUT("/api/user/{userId}")
     fun updateUserProfile(
         @Path("userId") userId: String,
-        @Field("full_name") fullName: String, // Use "full_name" to match the API field
+        @Field("full_name") fullName: String,
         @Field("email") email: String,
         @Field("address") address: String,
         @Field("phone_number") number: String
+    ): Call<Void>
+    @FormUrlEncoded
+    @PUT("/api/expert/update/{id}")
+    fun updateExpertProfile(
+        @Path("id") userId: String,
+        @Field("full_name") fullName: String,
+        @Field("email") email: String,
+        @Field("address") address: String,
+        @Field("phone_number") phoneNumber: String,
+        @Field("profession") profession: String,
+        @Field("date_of_birth") dateOfBirth: String
     ): Call<Void>
     @POST("change-password/{userId}")
     fun changePassword(

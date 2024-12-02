@@ -82,14 +82,14 @@ class ExpertDashBoardFragment : Fragment(R.layout.fragment_expert_dash_board) {
                         allBookings = bookings
 
                         // Categorize the bookings
-                        val ongoingBookings = allBookings.filter { it.status == "ongoing" }
-                        val completedBookings = allBookings.filter { it.status == "pending" }
+                        val acceptedBookings = allBookings.filter { it.status == "ongoing" }
+                        val pendingBookings = allBookings.filter { it.status == "pending" }
 
-                        Log.d("ExpertDashBoardFragment", "Ongoing Bookings: ${ongoingBookings.size}")
-                        Log.d("ExpertDashBoardFragment", "Completed Bookings: ${completedBookings.size}")
+                        Log.d("ExpertDashBoardFragment", "Ongoing Bookings: ${acceptedBookings.size}")
+                        Log.d("ExpertDashBoardFragment", "Completed Bookings: ${pendingBookings.size}")
 
-                        ongoingBookingsAdapter.updateBookings(ongoingBookings)
-                        expertBookingsAdapter.updateBookings(completedBookings)
+                        ongoingBookingsAdapter.updateBookings(acceptedBookings)
+                        expertBookingsAdapter.updateBookings(pendingBookings)
 
                         // Ensure RecyclerView is updated
                         binding.bookingsRecyclerView.scrollToPosition(0)
@@ -114,22 +114,27 @@ class ExpertDashBoardFragment : Fragment(R.layout.fragment_expert_dash_board) {
     private fun setNavigationListeners() {
         binding.activity.setOnClickListener {
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, ActivityPageFragment())
-                .commitAllowingStateLoss()
+                .replace(R.id.fragmentContainer, ExpertActivityFragment())
+                .addToBackStack(null)
+                .commit()
         }
         binding.payment.setOnClickListener {
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, PaymentFragment())
+                .replace(R.id.fragmentContainer, ExpertPaymentFragment())
+                .addToBackStack(null)
                 .commit()
         }
         binding.textHome.setOnClickListener {
             parentFragmentManager.beginTransaction()
                 .replace(R.id.fragmentContainer, ExpertDashBoardFragment())
-                .commitAllowingStateLoss()
+                .addToBackStack(null)
+                .commit()
         }
+
         binding.profile.setOnClickListener {
             parentFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, ProfileFragment())
+                .replace(R.id.fragmentContainer, ExpertProfileFragment())
+                .addToBackStack(null)
                 .commit()
         }
     }

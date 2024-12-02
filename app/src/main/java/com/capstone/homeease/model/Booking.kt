@@ -12,7 +12,7 @@ data class Booking(
     val note: String,
     val rate: String,
     @SerializedName("expert_address") val expertAddress: String,
-    var expertImageUrl: String = "",
+    @SerializedName("expert_image_url")var expertImageUrl: String?,
     @SerializedName("user_address")var userAddress: String = ""
 )
 
